@@ -1,0 +1,404 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuickBite Restaurant Management</title>
+
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+    }
+
+    header {
+      background: #191919;
+      color: white;
+      padding: 22px 30px;
+      border-bottom: 4px solid #ff7a00;
+    }
+
+    header h1 {
+      margin: 0;
+      color: #ff8a00;
+    }
+
+    header p {
+      margin-bottom: 0;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 25px auto;
+      padding: 0 18px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+
+    .card, .food, .orders {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 3px 12px #0000000d;
+    }
+
+    .stats h3 {
+      color: #777;
+      margin-top: 0;
+    }
+
+    .stats strong {
+      font-size: 26px;
+    }
+
+    h2 {
+      margin-top: 25px;
+    }
+
+    .menu {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 15px;
+    }
+
+    .food h3 {
+      margin-bottom: 8px;
+    }
+
+    .price {
+      color: #f07800;
+      font-weight: bold;
+      font-size: 19px;
+    }
+
+    button {
+      border: none;
+      padding: 11px 15px;
+      background: #ff7a00;
+      color: white;
+      border-radius: 7px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background: #dc6500;
+    }
+
+    button:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+
+    .remove {
+      background: #b42318;
+      margin-left: 8px;
+    }
+
+    .order-row {
+      padding: 12px 0;
+      border-bottom: 1px solid #eee;
+    }
+
+    .total {
+      font-size: 22px;
+      font-weight: bold;
+      margin: 20px 0;
+    }
+
+    input {
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 7px;
+      width: 100%;
+      margin-bottom: 15px;
+    }
+
+    .empty {
+      color: #777;
+    }
+
+    @media (max-width: 600px) {
+      .stats {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+<div id="app">
+  <header>
+    <h1>🍔 QuickBite</h1>
+    <p>Restaurant Management System</p>
+  </header>
+
+  <main>
+    <div class="stats">
+      <div class="card">
+        <h3>Total Orders</h3>
+        <strong>{{ orders.length }}</strong>
+      </div>
+
+      <div class="card">
+        <h3>Total Sales</h3>
+        <strong>₱{{ totalSales.toFixed(2) }}</strong>
+      </div>
+
+      <div class="card">
+        <h3>Menu Items</h3>
+        <strong>{{ menu.length }}</strong>
+      </div>
+    </div>
+
+    <h2>Food Menu</h2>
+
+    <input
+      v-model="search"
+      placeholder="Search food..."
+      @input="showInputEvent"
+    >
+
+    <div class="menu">
+      <div class="food" v-for="item in filteredMenu" :key="item.id">
+        <h3>{{ item.emoji }} {{ item.name }}</h3>
+        <p class="price">₱{{ item.price.toFixed(2) }}</p>
+
+        <button
+          @click="addToCart(item, $event)"
+          :disabled="!item.available"
+        >
+          {{ item.available ? 'Add to Cart' : 'Unavailable' }}
+        </button>
+      </div>
+    </div>
+
+    <h2>Current Order</h2>
+
+    <div class="orders">
+      <p v-if="cart.length === 0" class="empty">
+        No items added yet.
+      </p>
+
+      <div v-for="item in cart" :key="item.id" class="order-row">
+        <strong>{{ item.name }}</strong>
+        — ₱{{ (item.price * item.quantity).toFixed(2) }}
+        <p>Quantity: {{ item.quantity }}</p>
+
+        <button @click="changeQuantity(item, 1, $event)">
+          +
+        </button>
+
+        <button
+          class="remove"
+          @click="changeQuantity(item, -1, $event)"
+        >
+          −
+        </button>
+      </div>
+
+      <div class="total">
+        Total: ₱{{ cartTotal.toFixed(2) }}
+      </div>
+
+      <form @submit.prevent="placeOrder($event)">
+        <input
+          v-model="customerName"
+          placeholder="Customer name"
+          required
+        >
+
+        <button type="submit" :disabled="cart.length === 0">
+          Place Order
+        </button>
+      </form>
+    </div>
+
+    <h2>Order History</h2>
+
+    <div class="orders">
+      <p v-if="orders.length === 0" class="empty">
+        No completed orders yet.
+      </p>
+
+      <div v-for="order in orders" :key="order.id"
+           class="order-row">
+        <strong>Order #{{ order.id }}</strong>
+        <p>Customer: {{ order.customer }}</p>
+        <p>{{ order.items }}</p>
+        <p>Total: ₱{{ order.total.toFixed(2) }}</p>
+        <p>Status: {{ order.status }}</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const { createApp } = Vue;
+
+createApp({
+  data() {
+    return {
+      search: '',
+      customerName: '',
+      nextOrderId: 1,
+
+      menu: [
+        {
+          id: 1,
+          name: 'Classic Burger',
+          price: 99,
+          emoji: '🍔',
+          available: true
+        },
+        {
+          id: 2,
+          name: 'French Fries',
+          price: 59,
+          emoji: '🍟',
+          available: true
+        },
+        {
+          id: 3,
+          name: 'Pizza',
+          price: 149,
+          emoji: '🍕',
+          available: true
+        },
+        {
+          id: 4,
+          name: 'Chicken Meal',
+          price: 129,
+          emoji: '🍗',
+          available: true
+        },
+        {
+          id: 5,
+          name: 'Milk Tea',
+          price: 79,
+          emoji: '🧋',
+          available: true
+        },
+        {
+          id: 6,
+          name: 'Soft Drink',
+          price: 35,
+          emoji: '🥤',
+          available: true
+        }
+      ],
+
+      cart: [],
+      orders: []
+    };
+  },
+
+  computed: {
+    filteredMenu() {
+      return this.menu.filter(item =>
+        item.name.toLowerCase().includes(
+          this.search.toLowerCase()
+        )
+      );
+    },
+
+    cartTotal() {
+      return this.cart.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0
+      );
+    },
+
+    totalSales() {
+      return this.orders.reduce(
+        (sum, order) => sum + order.total,
+        0
+      );
+    }
+  },
+
+  methods: {
+    addToCart(item, event) {
+      const existing = this.cart.find(
+        food => food.id === item.id
+      );
+
+      if (existing) {
+        existing.quantity++;
+      } else {
+        this.cart.push({
+          ...item,
+          quantity: 1
+        });
+      }
+
+      console.log('Event type:', event.type);
+      console.log('Clicked element:', event.target);
+      console.log('Added food:', item.name);
+
+      alert(item.name + ' added to cart!');
+    },
+
+    changeQuantity(item, amount, event) {
+      item.quantity += amount;
+
+      console.log('Event type:', event.type);
+      console.log('Quantity changed:', item.name);
+
+      if (item.quantity <= 0) {
+        this.cart = this.cart.filter(
+          food => food.id !== item.id
+        );
+      }
+    },
+
+    showInputEvent(event) {
+      console.log('Event type:', event.type);
+      console.log('Search value:', event.target.value);
+    },
+
+    placeOrder(event) {
+      if (this.cart.length === 0) {
+        return;
+      }
+
+      const order = {
+        id: this.nextOrderId++,
+        customer: this.customerName,
+        items: this.cart.map(
+          item => item.name + ' x' + item.quantity
+        ).join(', '),
+        total: this.cartTotal,
+        status: 'Completed',
+        date: new Date().toLocaleString()
+      };
+
+      this.orders.unshift(order);
+
+      console.log('Submitted event:', event.type);
+      console.log('Order details:', order);
+
+      alert('Order placed successfully!');
+
+      this.cart = [];
+      this.customerName = '';
+    }
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
